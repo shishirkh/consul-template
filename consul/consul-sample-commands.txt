@@ -1,0 +1,6 @@
+
+
+
+consul kv put apps/Port "3000"
+consul kv put apps/Enabled yes
+consul kv put apps/name "shishir"

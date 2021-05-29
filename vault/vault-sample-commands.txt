@@ -1,0 +1,38 @@
+
+kubectl exec vault-0 -- vault operator init -key-shares=1 -key-threshold=1 -format=json > cluster-keys.json
+
+VAULT_UNSEAL_KEY=$(cat cluster-keys.json | jq -r ".unseal_keys_b64[]")
+echo $VAULT_UNSEAL_KEY
+
+
+VAULT_ROOT_KEY=$(cat cluster-keys.json | jq -r ".root_token")
+echo $VAULT_ROOT_KEY
+
+kubectl exec vault-0 -- vault operator unseal $VAULT_UNSEAL_KEY	
+kubectl exec vault-0 -- vault login $VAULT_ROOT_KEY
+
+
+vault secrets enable -version=2 -path="secret" kv
+
+vault kv put secret/apps/example dbPassword=my-secret-password
+
+vault auth enable --path="my-kube" kubernetes
+
+vault write auth/my-kube/config \
+        token_reviewer_jwt="$(cat /var/run/secrets/kubernetes.io/serviceaccount/token)" \
+        kubernetes_host="https://$KUBERNETES_PORT_443_TCP_ADDR:443" \
+        kubernetes_ca_cert=@/var/run/secrets/kubernetes.io/serviceaccount/ca.crt
+
+vault policy write example-policy - <<EOH
+path "secret/data/apps/demo" {
+  capabilities = ["read"]
+}
+EOH
+
+vault write auth/my-kube/role/example \
+        bound_service_account_names=example-sa \
+        bound_service_account_namespaces=test \
+        policies=example-policy \
+        ttl=24h
+
+vault token create --policy example-policy

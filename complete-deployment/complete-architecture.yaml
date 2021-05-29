@@ -1,0 +1,143 @@
+apiVersion: v1
+kind: Service
+metadata:
+  creationTimestamp: null
+  labels:
+    app: ct
+  name: ct-svc
+spec:
+  ports:
+  - port: 3001
+    protocol: TCP
+    targetPort: 3001
+  selector:
+    app: ct
+  type: NodePort
+status:
+  loadBalancer: {}
+
+---
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  namespace: test
+  name: ct-cm
+data:
+  config.tpl: |
+    {{ key "demo-app/envs" }}
+    {{ with secret "secret/apps/example" }}
+    Organization={{ .Data.data.organization }}
+    ID={{ .Data.data.customer_id }}
+    Contact={{ .Data.data.contact_email }}
+    {{ end }}
+
+---
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  creationTimestamp: null
+  labels:
+    app: ct
+  name: ct
+  namespace: test
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app: ct
+  strategy: {}
+  template:
+    metadata:
+      creationTimestamp: null
+      labels:
+        app: ct
+    spec:
+      initContainers:
+      - name: ict
+        image: hashicorp/consul-template:latest 
+        env:
+        - name: VAULT_TOKEN
+          value: "s.2gy8B3ByFEkOcOeFV7MCCNv4"
+        - name: CONSUL_ADDR
+          value: "192.168.49.2:30672"
+        - name: VAULT_ADDR
+          value: "http://192.168.49.2:30477"
+        - name: INPUT_FILE
+          value: "/input/config.tpl"
+        - name: OUTPUT_FILE
+          value: "/output/.env"
+        - name: LOG_LEVEL
+          value: "info"
+        args:
+        - -log-level=$(LOG_LEVEL)
+        - -consul-addr=$(CONSUL_ADDR)
+        - -vault-addr=$(VAULT_ADDR) 
+        - -template=$(INPUT_FILE):$(OUTPUT_FILE) 
+        - -once
+        volumeMounts:
+        - name: ct-input
+          mountPath: /input/
+        - name: ct-output
+          mountPath: /output/
+      containers:
+      - name: ct
+        image: hashicorp/consul-template:latest
+        env:
+        - name: VAULT_TOKEN
+          value: "s.2gy8B3ByFEkOcOeFV7MCCNv4"
+        - name: CONSUL_ADDR
+          value: "192.168.49.2:30672"
+        - name: VAULT_ADDR
+          value: "http://192.168.49.2:30477"
+        - name: INPUT_FILE
+          value: "/input/config.tpl"
+        - name: OUTPUT_FILE
+          value: "/output/.env"
+        - name: LOG_LEVEL
+          value: "info"
+        args:
+        - -log-level=$(LOG_LEVEL)
+        - -consul-addr=$(CONSUL_ADDR)
+        - -vault-addr=$(VAULT_ADDR)
+        - -template=$(INPUT_FILE):$(OUTPUT_FILE)
+        volumeMounts:
+        - name: ct-input
+          mountPath: /input/
+        - name: ct-output
+          mountPath: /output/
+      - name: app
+        image: shishirkhandelwal/consul-template-demo-app:0.2
+        command: ["/bin/sh","-c","DOTENV_CONFIG_PATH=$(ENV_FILE_PATH) node -r dotenv/config index.js"]
+        env:
+        - name: ENV_FILE_PATH
+          value: "/output/.env"
+        - name: ENV_FILE_COPY_PATH
+          value: "/output/env-original-copy"
+        volumeMounts:
+        - name: ct-input
+          mountPath: /input/
+        - name: ct-output
+          mountPath: /output/
+        lifecycle:
+          postStart:
+            exec:
+              command: ["/bin/sh","-c","cp ${ENV_FILE_PATH} ${ENV_FILE_COPY_PATH}"]
+        livenessProbe:
+          exec:
+            command:
+            - /bin/sh
+            - -c
+            - if cmp -s -- $(ENV_FILE_PATH) $(ENV_FILE_COPY_PATH); then exit 0; else exit 1; fi
+          initialDelaySeconds: 5
+          periodSeconds: 5
+          failureThreshold: 1
+          successThreshold: 1
+          timeoutSeconds: 5
+      volumes:
+      - name: ct-input
+        configMap:
+          name: ct-cm
+      - name: ct-output
+        emptyDir:
+          medium: Memory
+status: {}

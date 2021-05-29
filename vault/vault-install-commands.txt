@@ -1,0 +1,3 @@
+#to install vault
+helm repo add hashicorp https://helm.releases.hashicorp.com
+helm install vault hashicorp/vault --values vault-custom-values.yaml

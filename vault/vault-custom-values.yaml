@@ -1,0 +1,15 @@
+ui:
+  enabled: true
+  serviceType: "NodePort"
+
+injector:
+  enabled: false
+
+server:
+  dataStorage:
+    enabled: true
+    size: 1Gi
+  ha:
+    enabled: false
+    replicas: 1
+
