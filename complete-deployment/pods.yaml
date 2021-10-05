@@ -3,7 +3,7 @@ kind: Pod
 metadata:
   creationTimestamp: null
   labels:
-    run: redis
+    run: redis1234567
   name: redis
 spec:
   containers:
