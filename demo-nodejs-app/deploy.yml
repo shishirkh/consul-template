@@ -1,0 +1,24 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  creationTimestamp: null
+  labels:
+    app: tarun
+  name: tarun
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app: tarun
+  strategy: {}
+  template:
+    metadata:
+      creationTimestamp: null
+      labels:
+        app: tarun
+    spec:
+      containers:
+      - image: shishirkhandelwal/sample-app:0.1
+        name: sample-app
+        resources: {}
+status: {}
